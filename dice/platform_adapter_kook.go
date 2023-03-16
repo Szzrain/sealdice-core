@@ -408,49 +408,50 @@ func (pa *PlatformAdapterKook) SetGroupCardName(groupId string, userId string, n
 }
 func trimHtml(src string) string {
 	//将HTML标签全转换成小写
-	re, _ := regexp.Compile("\\<[\\S\\s]+?\\>")
+	re, _ := regexp.Compile(`<[\S\s]+?>`)
 	src = re.ReplaceAllStringFunc(src, strings.ToLower)
 	//去除STYLE
-	re, _ = regexp.Compile("\\<style[\\S\\s]+?\\</style\\>")
+	re, _ = regexp.Compile(`<style[Ss]+?</style>`)
 	src = re.ReplaceAllString(src, "")
 	//去除SCRIPT
-	re, _ = regexp.Compile("\\<script[\\S\\s]+?\\</script\\>")
+	re, _ = regexp.Compile(`<script[Ss]+?</script>`)
 	src = re.ReplaceAllString(src, "")
 	//去除所有尖括号内的HTML代码，并换成换行符
-	re, _ = regexp.Compile("\\<[\\S\\s]+?\\>")
+	re, _ = regexp.Compile(`<[\\Ss]+?>`)
 	src = re.ReplaceAllString(src, "\n")
 	//去除连续的换行符
-	re, _ = regexp.Compile("\\s{2,}")
+	re, _ = regexp.Compile(`\s{2,}`)
 	src = re.ReplaceAllString(src, "\n")
 	return strings.TrimSpace(src)
 }
-func markdownAntiConvert(src string) string {
-	re, _ := regexp.Compile("\\\\")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("`")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("\\*")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("_")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("\\{\\}")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("\\[\\]")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("\\(\\)")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("#")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	//re, _ = regexp.Compile("\\\n")
-	//src = re.ReplaceAllString(src, "\n")
-	//re, _ = regexp.Compile("-")
-	//src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("\\.")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	re, _ = regexp.Compile("!")
-	src = re.ReplaceAllStringFunc(src, addSlash)
-	return strings.TrimSpace(src)
-}
+
+//	func markdownAntiConvert(src string) string {
+//		re, _ := regexp.Compile("\\\\")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("`")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("\\*")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("_")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile(`{}`)
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("\\[\\]")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("\\(\\)")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("#")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		//re, _ = regexp.Compile("\\\n")
+//		//src = re.ReplaceAllString(src, "\n")
+//		//re, _ = regexp.Compile("-")
+//		//src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("\\.")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		re, _ = regexp.Compile("!")
+//		src = re.ReplaceAllStringFunc(src, addSlash)
+//		return strings.TrimSpace(src)
+//	}
 func addSlash(src string) string {
 	return "\\" + src
 }

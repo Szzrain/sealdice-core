@@ -28,7 +28,7 @@ func backupGetList(c echo.Context) error {
 	}
 
 	var items []*backupFileItem
-	filepath.Walk("./backups", func(path string, info fs.FileInfo, err error) error {
+	_ = filepath.Walk("./backups", func(path string, info fs.FileInfo, err error) error {
 		if !info.IsDir() {
 			items = append(items, &backupFileItem{
 				Name:     info.Name(),

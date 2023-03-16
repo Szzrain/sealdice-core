@@ -664,7 +664,7 @@ func (pa *PlatformAdapterWalleQ) Serve() int {
 						}
 					}
 
-				} else {
+				} else { //nolint
 					// TODO: 这玩意的创建是个专业活，等下来弄
 					//session.ServiceAtNew[groupId] = GroupInfo{}
 				}
@@ -673,10 +673,10 @@ func (pa *PlatformAdapterWalleQ) Serve() int {
 				//pa.echoMap.Store("get_group_member_info", )
 
 			}
-
-			if pa.echoMap != nil {
-
-			}
+			//TODO
+			//if pa.echoMap != nil {
+			//
+			//}
 		}
 
 	}

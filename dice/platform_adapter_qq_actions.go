@@ -120,7 +120,7 @@ func (pa *PlatformAdapterGocq) GetGroupInfo(groupId string) *OnebotGroupInfo {
 
 func socketSendText(socket *gowebsocket.Socket, s string) {
 	defer func() {
-		if r := recover(); r != nil {
+		if r := recover(); r != nil { //nolint
 			//core.GetLogger().Error(r)
 		}
 	}()
@@ -133,7 +133,7 @@ func socketSendText(socket *gowebsocket.Socket, s string) {
 // 不知道为什么，使用这个时候发不出话
 func socketSendBinary(socket *gowebsocket.Socket, data []byte) {
 	defer func() {
-		if r := recover(); r != nil {
+		if r := recover(); r != nil { //nolint
 			//core.GetLogger().Error(r)
 		}
 	}()
@@ -512,9 +512,7 @@ func textSplit(input string) []string {
 	}
 	splits = append(splits, input[l:])
 
-	for _, i := range poke {
-		splits = append(splits, i)
-	}
+	splits = append(splits, poke...)
 
 	return splits
 }
