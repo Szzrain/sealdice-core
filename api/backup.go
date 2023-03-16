@@ -61,7 +61,7 @@ func backupDownload(c echo.Context) error {
 	return c.JSON(http.StatusOK, nil)
 }
 
-func backupDelete(c echo.Context) error {
+func backupDelete(c echo.Context) error { //nolint
 	if !doAuth(c) {
 		return c.JSON(http.StatusForbidden, nil)
 	}

@@ -131,7 +131,7 @@ func socketSendText(socket *gowebsocket.Socket, s string) {
 }
 
 // 不知道为什么，使用这个时候发不出话
-func socketSendBinary(socket *gowebsocket.Socket, data []byte) {
+func socketSendBinary(socket *gowebsocket.Socket, data []byte) { //nolint
 	defer func() {
 		if r := recover(); r != nil { //nolint
 			//core.GetLogger().Error(r)
