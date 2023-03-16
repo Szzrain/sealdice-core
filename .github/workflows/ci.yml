@@ -37,13 +37,13 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         if: github.event.name == 'pull_request'
         with:
+          go-version: '1.18'
           only-new-issues: true
           skip-pkg-cache: true
           skip-build-cache: true
 
       - name: GolangCI-Lint
-        uses: golangci/golangci-lint-action@v3
-        if: github.event.name != 'pull_request'
-        with:
-          go-version: '1.18'
-          version: latest
+        if: github.event.name != 'pull_request' # See https://github.com/golangci/golangci-lint-action/issues/362
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+          $(go env GOPATH)/bin/golangci-lint run
