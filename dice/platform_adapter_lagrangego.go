@@ -367,6 +367,32 @@ func (pa *PlatformAdapterLagrangeGo) Serve() int {
 
 	pa.QQClient.GroupInvitedEvent.Subscribe(func(client *client.QQClient, event *event.GroupInvite) {
 		log.Debugf("GroupInvitedEvent: %+v", event)
+		inviterUin := pa.QQClient.GetUin(event.InvitorUid, event.GroupUin)
+		log.Debugf("InviterUin: %d", inviterUin)
+		fetch, errb := oidb.BuildFetchGroupRequestsReq()
+		if errb != nil {
+			log.Errorf("BuildFetchGroupRequestsReq failed: %v", errb)
+		}
+		response, errb := pa.QQClient.SendOidbPacketAndWait(fetch)
+		if errb != nil {
+			log.Errorf("FetchGroupRequests failed: %v", errb)
+		}
+		body, errb := oidb.ParseFetchGroupRequestsReq(response.Data)
+		if errb != nil {
+			log.Errorf("ParseFetchGroupRequestsResp failed: %v", errb)
+		}
+		if body == nil {
+			log.Errorf("FetchGroupRequestsResp body is nil")
+			return
+		}
+		log.Debugf("FetchGroupRequestsResp: %+v", body)
+		if body.Requests == nil {
+			for _, request := range body.Requests {
+				log.Debugf("Request: %+v", request)
+			}
+		} else {
+			log.Debugf("No requests")
+		}
 	})
 
 	pa.QQClient.GroupMemberLeaveEvent.Subscribe(func(client *client.QQClient, event *event.GroupMemberDecrease) {
