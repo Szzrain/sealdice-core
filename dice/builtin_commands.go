@@ -14,35 +14,49 @@ import (
 	"time"
 
 	"github.com/golang-module/carbon"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
 
 	"github.com/fy0/lockfree"
 	"github.com/juliangruber/go-intersect"
 	cp "github.com/otiai10/copy"
 	ds "github.com/sealdice/dicescript"
+
+	"sealdice-core/localizer"
 )
 
 /** 这几条指令不能移除 */
 func (d *Dice) registerCoreCommands() {
-	helpForBlack := ".ban add user <帐号> (<原因>) //添加个人\n" +
-		".ban add group <群号> (<原因>) //添加群组\n" +
-		".ban add <统一ID>\n" +
-		".ban rm user <帐号> //解黑/移出信任\n" +
-		".ban rm group <群号>\n" +
-		".ban rm <统一ID> //同上\n" +
-		".ban list // 展示列表\n" +
-		".ban list ban/warn/trust //只显示被禁用/被警告/信任用户\n" +
-		".ban trust <统一ID> //添加信任\n" +
-		".ban query <统一ID> //查看指定用户拉黑情况\n" +
-		".ban help //查看帮助\n" +
-		"// 统一ID示例: QQ:12345、QQ-Group:12345"
+	helpForBlack := localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+		DefaultMessage: &i18n.Message{
+			ID: "dice.core.builtin.command.black.help",
+			Other: "黑名单指令:\n" +
+				".ban add user <帐号> (<原因>) //添加个人\n" +
+				".ban add group <群号> (<原因>) //添加群组\n" +
+				".ban add <统一ID>\n" +
+				".ban rm user <帐号> //解黑/移出信任\n" +
+				".ban rm group <群号>\n" +
+				".ban rm <统一ID> //同上\n" +
+				".ban list // 展示列表\n" +
+				".ban list ban/warn/trust //只显示被禁用/被警告/信任用户\n" +
+				".ban trust <统一ID> //添加信任\n" +
+				".ban query <统一ID> //查看指定用户拉黑情况\n" +
+				".ban help //查看帮助\n" +
+				"// 统一ID示例: QQ:12345、QQ-Group:12345",
+		},
+	})
 	cmdBlack := &CmdItemInfo{
 		Name:      "ban",
 		ShortHelp: helpForBlack,
-		Help:      "黑名单指令:\n" + helpForBlack,
+		Help:      helpForBlack,
 		Solve: func(ctx *MsgContext, msg *Message, cmdArgs *CmdArgs) CmdExecuteResult {
 			cmdArgs.ChopPrefixToArgsWith("add", "rm", "del", "list", "show", "find", "trust")
 			if ctx.PrivilegeLevel < 100 {
-				ReplyToSender(ctx, msg, "你不具备Master权限")
+				ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.permission_required.master.info",
+						Other: "你不具备Master权限",
+					},
+				}))
 				return CmdExecuteResult{Matched: true, Solved: true}
 			}
 
@@ -74,10 +88,25 @@ func (d *Dice) registerCoreCommands() {
 				}
 				reason := cmdArgs.GetArgN(4)
 				if reason == "" {
-					reason = "骰主指令"
+					reason = localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.black.add_reason.default",
+							Other: "骰主指令",
+						},
+					})
 				}
-				d.BanList.AddScoreBase(uid, d.BanList.ThresholdBan, "骰主指令", reason, ctx)
-				ReplyToSender(ctx, msg, fmt.Sprintf("已将用户/群组 %s 加入黑名单，原因: %s", uid, reason))
+				d.BanList.AddScoreBase(uid, d.BanList.ThresholdBan, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.add_reason.default",
+						Other: "骰主指令",
+					},
+				}), reason, ctx)
+				ReplyToSender(ctx, msg, fmt.Sprintf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.add_black_success.info",
+						Other: "已将用户/群组 %s 加入黑名单，原因: %s",
+					},
+				}), uid, reason))
 			case "rm", "del":
 				uid = getID()
 				if uid == "" {
@@ -86,11 +115,21 @@ func (d *Dice) registerCoreCommands() {
 
 				item, ok := d.BanList.GetByID(uid)
 				if !ok || (item.Rank != BanRankBanned && item.Rank != BanRankTrusted && item.Rank != BanRankWarn) {
-					ReplyToSender(ctx, msg, "找不到用户/群组")
+					ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.black.rm_not_found.error",
+							Other: "找不到用户/群组",
+						},
+					}))
 					break
 				}
 
-				ReplyToSender(ctx, msg, fmt.Sprintf("已将用户/群组 %s 移出%s列表", uid, BanRankText[item.Rank]))
+				ReplyToSender(ctx, msg, fmt.Sprintf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.rm_success.info",
+						Other: "已将用户/群组 %s 移出%s列表",
+					},
+				}), uid, BanRankText[item.Rank]))
 				item.Score = 0
 				item.Rank = BanRankNormal
 			case "trust":
@@ -100,8 +139,23 @@ func (d *Dice) registerCoreCommands() {
 					return CmdExecuteResult{Matched: true, Solved: true, ShowHelp: true}
 				}
 
-				d.BanList.SetTrustByID(uid, "骰主指令", "骰主指令")
-				ReplyToSender(ctx, msg, fmt.Sprintf("已将用户/群组 %s 加入信任列表", uid))
+				d.BanList.SetTrustByID(uid, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.add_reason.default",
+						Other: "骰主指令",
+					},
+				}), localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.add_reason.default",
+						Other: "骰主指令",
+					},
+				}))
+				ReplyToSender(ctx, msg, fmt.Sprintf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.add_trust_success.info",
+						Other: "已将用户/群组 %s 加入信任列表",
+					},
+				}), uid))
 			case "list", "show":
 				// ban/warn/trust
 				var extra, text string
@@ -122,38 +176,88 @@ func (d *Dice) registerCoreCommands() {
 				})
 
 				if text == "" {
-					text = "当前名单:\n<无内容>"
+					text = localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.black.list.info.prefix",
+							Other: "当前名单:\n",
+						},
+					}) + "<无内容>"
 				} else {
-					text = "当前名单:\n" + text
+					text = localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.black.list.info.prefix",
+							Other: "当前名单:\n",
+						},
+					}) + text
 				}
 				ReplyToSender(ctx, msg, text)
 			case "query":
 				var targetID = cmdArgs.GetArgN(2)
 				if targetID == "" {
-					ReplyToSender(ctx, msg, "未指定要查询的对象！")
+					ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.black.query.no_target.info",
+							Other: "未指定要查询的对象！",
+						},
+					}))
 					break
 				}
 
 				v, exists := d.BanList.Map.Load(targetID)
 				if !exists {
-					ReplyToSender(ctx, msg, fmt.Sprintf("所查询的<%s>情况：正常(0)", targetID))
+					ReplyToSender(ctx, msg, fmt.Sprintf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.black.query.not_found_normal.info",
+							Other: "所查询的<%s>情况：正常(0)",
+						},
+					}), targetID))
 					break
 				}
 
-				var text = fmt.Sprintf("所查询的<%s>情况：", targetID)
+				var text = fmt.Sprintf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.black.query.found.info.prefix",
+						Other: "所查询的<%s>情况：",
+					},
+				}), targetID)
 				switch v.Rank {
 				case BanRankBanned:
-					text += "禁止(-30)"
+					text += localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.black.ban_rank.banned",
+							Other: "禁止(-30)",
+						},
+					})
 				case BanRankWarn:
-					text += "警告(-10)"
+					text += localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.black.ban_rank.warn",
+							Other: "警告(-10)",
+						},
+					})
 				case BanRankTrusted:
-					text += "信任(30)"
+					text += localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.black.ban_rank.trusted",
+							Other: "信任(30)",
+						},
+					})
 				default:
-					text += "正常(0)"
+					text += localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.black.ban_rank.normal",
+							Other: "正常(0)",
+						},
+					})
 				}
 				for i, reason := range v.Reasons {
 					text += fmt.Sprintf(
-						"\n%s在「%s」，原因：%s",
+						localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+							DefaultMessage: &i18n.Message{
+								ID:    "dice.core.builtin.command.black.query.place_and_reason.postfix",
+								Other: "\n%s在「%s」，原因：%s",
+							},
+						}),
 						carbon.CreateFromTimestamp(v.Times[i]).ToDateTimeString(),
 						v.Places[i],
 						reason,
@@ -169,18 +273,24 @@ func (d *Dice) registerCoreCommands() {
 	d.CmdMap["black"] = cmdBlack
 	d.CmdMap["ban"] = cmdBlack
 
-	helpForFind := ".find/查询 <关键字> // 查找文档。关键字可以多个，用空格分割\n" +
-		".find #<分组> <关键字> // 查找指定分组下的文档。关键字可以多个，用空格分割\n" +
-		".find <数字ID> // 显示该ID的词条\n" +
-		".find --rand // 显示随机词条\n" +
-		".find <关键字> --num=10 // 需要更多结果\n" +
-		".find config --group // 查看当前默认搜索分组\n" +
-		".find config --group=<分组> // 设置当前默认搜索分组\n" +
-		".find config --groupclr // 清空当前默认搜索分组"
+	helpForFind := localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+		DefaultMessage: &i18n.Message{
+			ID: "dice.core.builtin.command.find.help",
+			Other: "查询指令，通常使用全文搜索(x86版)或快速查询(arm, 移动版):\n" +
+				".find/查询 <关键字> // 查找文档。关键字可以多个，用空格分割\n" +
+				".find #<分组> <关键字> // 查找指定分组下的文档。关键字可以多个，用空格分割\n" +
+				".find <数字ID> // 显示该ID的词条\n" +
+				".find --rand // 显示随机词条\n" +
+				".find <关键字> --num=10 // 需要更多结果\n" +
+				".find config --group // 查看当前默认搜索分组\n" +
+				".find config --group=<分组> // 设置当前默认搜索分组\n" +
+				".find config --groupclr // 清空当前默认搜索分组",
+		},
+	})
 	cmdFind := &CmdItemInfo{
 		Name:      "find",
 		ShortHelp: helpForFind,
-		Help:      "查询指令，通常使用全文搜索(x86版)或快速查询(arm, 移动版):\n" + helpForFind,
+		Help:      helpForFind,
 		// 写不下了
 		// + "\n注: 默认搭载的《怪物之锤查询》来自蜜瓜包、October整理\n默认搭载的COC《魔法大典》来自魔骨，NULL，Dr.Amber整理\n默认搭载的DND系列文档来自DicePP项目"
 		Solve: func(ctx *MsgContext, msg *Message, cmdArgs *CmdArgs) CmdExecuteResult {
@@ -189,7 +299,12 @@ func (d *Dice) registerCoreCommands() {
 			}
 
 			if d.Parent.IsHelpReloading {
-				ReplyToSender(ctx, msg, "帮助文档正在重新装载，请稍后...")
+				ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.builtin.command.find.reloading.info",
+						Other: "帮助文档正在重新装载，请稍后...",
+					},
+				}))
 				return CmdExecuteResult{Matched: true, Solved: true}
 			}
 
@@ -198,30 +313,65 @@ func (d *Dice) registerCoreCommands() {
 				if cmdArgs.GetKwarg("groupclr") != nil {
 					ctx.Group.SetDefaultHelpGroup("")
 					if oldDefault != "" {
-						ReplyToSender(ctx, msg, "已清空默认搜索分组，原分组为"+oldDefault)
+						ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+							DefaultMessage: &i18n.Message{
+								ID:    "dice.core.builtin.command.find.config.groupclr.info.prefix",
+								Other: "已清空默认搜索分组，原分组为",
+							},
+						})+oldDefault)
 					} else {
-						ReplyToSender(ctx, msg, "未指定默认搜索分组")
+						ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+							DefaultMessage: &i18n.Message{
+								ID:    "dice.core.builtin.command.find.config.groupclr.no_default.info",
+								Other: "未指定默认搜索分组",
+							},
+						}))
 					}
 				} else if _defaultGroup := cmdArgs.GetKwarg("group"); _defaultGroup != nil {
 					defaultGroup := _defaultGroup.Value
 					if defaultGroup == "" {
 						// 为查看默认分组
 						if oldDefault != "" {
-							ReplyToSender(ctx, msg, "当前默认搜索分组为"+oldDefault)
+							ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+								DefaultMessage: &i18n.Message{
+									ID:    "dice.core.builtin.command.find.config.group.info.prefix",
+									Other: "当前默认搜索分组为",
+								},
+							})+oldDefault)
 						} else {
-							ReplyToSender(ctx, msg, "未指定默认搜索分组")
+							ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+								DefaultMessage: &i18n.Message{
+									ID:    "dice.core.builtin.command.find.config.group.no_default.info",
+									Other: "未指定默认搜索分组",
+								},
+							}))
 						}
 					} else {
 						// 为设置默认分组
 						ctx.Group.SetDefaultHelpGroup(defaultGroup)
 						if oldDefault != "" {
-							ReplyToSender(ctx, msg, fmt.Sprintf("默认搜索分组由%s切换到%s", oldDefault, defaultGroup))
+							ReplyToSender(ctx, msg, fmt.Sprintf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+								DefaultMessage: &i18n.Message{
+									ID:    "dice.core.builtin.command.find.config.group.switch.info",
+									Other: "默认搜索分组由%s切换到%s",
+								},
+							}), oldDefault, defaultGroup))
 						} else {
-							ReplyToSender(ctx, msg, "指定默认搜索分组为"+defaultGroup)
+							ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+								DefaultMessage: &i18n.Message{
+									ID:    "dice.core.builtin.command.find.config.group.set_default.info.prefix",
+									Other: "指定默认搜索分组为",
+								},
+							})+defaultGroup)
 						}
 					}
 				} else {
-					ReplyToSender(ctx, msg, "设置选项有误")
+					ReplyToSender(ctx, msg, localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+						DefaultMessage: &i18n.Message{
+							ID:    "dice.core.builtin.command.find.config.invalid_option.error",
+							Other: "设置选项有误",
+						},
+					}))
 					return CmdExecuteResult{Matched: true, Solved: true}
 				}
 				return CmdExecuteResult{Matched: true, Solved: true}

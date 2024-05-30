@@ -4,8 +4,11 @@ import (
 	"os"
 
 	"github.com/natefinch/lumberjack"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"sealdice-core/localizer"
 )
 
 func MainLoggerInit(path string, enableConsoleLog bool) {
@@ -37,7 +40,12 @@ func MainLoggerInit(path string, enableConsoleLog bool) {
 	}(loggerRaw) // flushes buffer, if any
 
 	logger = loggerRaw.Sugar()
-	logger.Infow("核心日志开始记录")
+	logger.Infow(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+		DefaultMessage: &i18n.Message{
+			ID:    "dice.core.main.logger_start.info",
+			Other: "核心日志开始记录",
+		},
+	}))
 }
 
 var logger *zap.SugaredLogger

@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/kardianos/service"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
+
+	"sealdice-core/localizer"
 )
 
 type program struct{}
@@ -45,31 +48,71 @@ func serviceInstall(isInstall bool, serviceName string, user string) {
 	}
 
 	prg := &program{}
-	fmt.Println("正在试图访问系统服务 ...")
+	fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+		DefaultMessage: &i18n.Message{
+			ID:    "dice.core.sys_service.try_access.info",
+			Other: "正在试图访问系统服务 ...",
+		},
+	}))
 	s, err := service.New(prg, svcConfig)
 
 	if isInstall {
-		fmt.Println("正在安装系统服务，安装完成后，SealDice将自动随系统启动")
+		fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.sys_service.installing.info",
+				Other: "正在安装系统服务，安装完成后，SealDice将自动随系统启动",
+			},
+		}))
 		if err != nil {
-			fmt.Printf("安装失败: %s\n", err.Error())
+			fmt.Printf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.sys_service.install_failed.error",
+					Other: "安装失败: %s\n",
+				},
+			}), err.Error())
 		}
 		_, err = s.Logger(nil)
 		if err != nil {
-			fmt.Printf("安装失败: %s\n", err.Error())
+			fmt.Printf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.sys_service.install_failed.error",
+					Other: "安装失败: %s\n",
+				},
+			}), err.Error())
 			fmt.Println(err)
 		}
 		err = s.Install()
 		if err != nil {
-			fmt.Printf("安装失败: %s\n", err.Error())
+			fmt.Printf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.sys_service.install_failed.error",
+					Other: "安装失败: %s\n",
+				},
+			}), err.Error())
 			return
 		}
 
-		fmt.Println("安装完成，正在启动……")
+		fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.sys_service.install_success.info",
+				Other: "安装完成，正在启动……",
+			},
+		}))
 		_ = s.Start()
 	} else {
-		fmt.Println("正在卸载系统服务……")
+		fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.sys_service.uninstalling.info",
+				Other: "正在卸载系统服务……",
+			},
+		}))
 		_ = s.Stop()
 		_ = s.Uninstall()
-		fmt.Println("系统服务已删除")
+		fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.sys_service.uninstall_success.info",
+				Other: "系统服务已删除",
+			},
+		}))
 	}
 }

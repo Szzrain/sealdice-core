@@ -20,6 +20,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -27,6 +28,7 @@ import (
 	"sealdice-core/dice"
 	diceLogger "sealdice-core/dice/logger"
 	"sealdice-core/dice/model"
+	"sealdice-core/localizer"
 	"sealdice-core/migrate"
 	"sealdice-core/static"
 	"sealdice-core/utils/crypto"
@@ -43,11 +45,21 @@ extensions/
 
 func cleanupCreate(diceManager *dice.DiceManager) func() {
 	return func() {
-		logger.Info("程序即将退出，进行清理……")
+		logger.Info(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.cleanup",
+				Other: "程序即将退出，进行清理……",
+			},
+		}))
 		err := recover()
 		if err != nil {
 			showWindow()
-			logger.Errorf("异常: %v\n堆栈: %v", err, string(debug.Stack()))
+			logger.Errorf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.main.error.stack",
+					Other: "异常: %v\n堆栈: %v",
+				},
+			}), err, string(debug.Stack()))
 			// 顺便修正一下上面这个，应该是木落忘了。
 			if runtime.GOOS == "windows" {
 				exec.Command("pause") // windows专属
@@ -69,7 +81,12 @@ func cleanupCreate(diceManager *dice.DiceManager) func() {
 						err := j.StorageClose()
 						if err != nil {
 							showWindow()
-							logger.Errorf("异常: %v\n堆栈: %v", err, string(debug.Stack()))
+							logger.Errorf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+								DefaultMessage: &i18n.Message{
+									ID:    "dice.core.main.error.stack",
+									Other: "异常: %v\n堆栈: %v",
+								},
+							}), err, string(debug.Stack()))
 							// 木落没有加该检查 补充上
 							if runtime.GOOS == "windows" {
 								exec.Command("pause") // windows专属
@@ -195,6 +212,7 @@ func main() {
 
 	_, err := flags.ParseArgs(&opts, os.Args)
 	if err != nil {
+		fmt.Println("Parse Program Args Failed: ", err)
 		return
 	}
 
@@ -218,8 +236,19 @@ func main() {
 	}
 	deleteOldWrongFile()
 
+	_, err = localizer.TranslateBundleSetup("es.toml")
+	if err != nil {
+		fmt.Println("Load Translate Bundle Failed: ", err)
+		return
+	}
+
 	if opts.Delay != 0 {
-		fmt.Println("延迟启动", opts.Delay, "秒")
+		fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.error.stack",
+				Other: "异常: %v\n堆栈: %v",
+			},
+		}), opts.Delay, "秒")
 		time.Sleep(time.Duration(opts.Delay) * time.Second)
 	}
 
@@ -236,7 +265,12 @@ func main() {
 	diceManager := &dice.DiceManager{}
 
 	if opts.ContainerMode {
-		logger.Info("当前为容器模式，内置适配器与更新功能已被禁用")
+		logger.Info(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.container_mode.info",
+				Other: "当前为容器模式，内置适配器与更新功能已被禁用",
+			},
+		}))
 		diceManager.ContainerMode = true
 	}
 
@@ -244,7 +278,12 @@ func main() {
 	diceManager.IsReady = true
 
 	if opts.Address != "" {
-		fmt.Println("由参数输入了服务地址:", opts.Address)
+		fmt.Println(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.service_address_setup.info",
+				Other: "由参数输入了服务地址:",
+			},
+		}), opts.Address)
 		diceManager.ServeAddress = opts.Address
 	}
 
@@ -281,12 +320,27 @@ func main() {
 			// 只有不同文件才进行校验
 			// windows平台旧版本到1.4.0流程
 			_ = os.WriteFile("./升级失败指引.txt", []byte("如果升级成功不用理会此文档，直接删除即可。\r\n\r\n如果升级后无法启动，或再次启动后恢复到旧版本，先不要紧张。\r\n你升级前的数据备份在backups目录。\r\n如果无法启动，请删除海豹目录中的\"update\"、\"auto_update.exe\"并手动进行升级。\n如果升级成功但在再次重启后回退版本，同上。\n\n如有其他问题可以加企鹅群询问：524364253 562897832"), 0o644)
-			logger.Warn("检测到 auto_update.exe，即将自动退出当前程序并进行升级")
-			logger.Warn("程序目录下会出现“升级日志.log”，这代表升级正在进行中，如果失败了请检查此文件。")
+			logger.Warn(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.main.auto_update.exiting.warn",
+					Other: "检测到 auto_update.exe，即将自动退出当前程序并进行升级",
+				},
+			}))
+			logger.Warn(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.main.auto_update.tips.warn",
+					Other: "程序目录下会出现“升级日志.log”，这代表升级正在进行中，如果失败了请检查此文件。",
+				},
+			}))
 
 			err := CheckUpdater(diceManager)
 			if err != nil {
-				logger.Error("升级程序检查失败: ", err.Error())
+				logger.Error(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.main.auto_update.failed.error",
+						Other: "升级程序检查失败: ",
+					},
+				}), err.Error())
 			} else {
 				_ = os.Remove("./auto_update.exe")
 				// ui资源已经内置，删除旧的ui文件，这里有点风险，但是此时已经不考虑升级失败的情况
@@ -308,7 +362,12 @@ func main() {
 		if doNext {
 			err := CheckUpdater(diceManager)
 			if err != nil {
-				logger.Error("升级程序检查失败: ", err.Error())
+				logger.Error(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+					DefaultMessage: &i18n.Message{
+						ID:    "dice.core.main.auto_update.failed.error",
+						Other: "升级程序检查失败: ",
+					},
+				}), err.Error())
 			} else {
 				_ = os.Remove("./auto_update")
 				// ui资源已经内置，删除旧的ui文件，这里有点风险，但是此时已经不考虑升级失败的情况
@@ -323,7 +382,12 @@ func main() {
 	if opts.UpdateTest {
 		err := CheckUpdater(diceManager)
 		if err != nil {
-			logger.Error("升级程序检查失败: ", err.Error())
+			logger.Error(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.main.auto_update.failed.error",
+					Other: "升级程序检查失败: ",
+				},
+			}), err.Error())
 		} else {
 			UpdateByFile(diceManager, nil, "./xx.zip", true)
 		}
@@ -333,7 +397,12 @@ func main() {
 	diceManager.UpdateSealdiceByFile = func(packName string, log *zap.SugaredLogger) bool {
 		err := CheckUpdater(diceManager)
 		if err != nil {
-			logger.Error("升级程序检查失败: ", err.Error())
+			logger.Error(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+				DefaultMessage: &i18n.Message{
+					ID:    "dice.core.main.auto_update.failed.error",
+					Other: "升级程序检查失败: ",
+				},
+			}), err.Error())
 			return false
 		} else {
 			return UpdateByFile(diceManager, log, packName, false)
@@ -357,16 +426,41 @@ func main() {
 		return err == nil && stat.IsDir()
 	}
 	if !checkFrontendExists() {
-		logger.Info("未检测到外置的UI资源文件，将使用内置资源启动UI")
+		logger.Info(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.ui.use_internal.info",
+				Other: "未检测到外置的UI资源文件，将使用内置资源启动UI",
+			},
+		}))
 		useBuiltinUI = true
 	} else {
-		logger.Info("检测到外置的UI资源文件，将使用frontend_overwrite文件夹内的资源启动UI")
+		logger.Info(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.ui.use_external.info",
+				Other: "检测到外置的UI资源文件，将使用frontend_overwrite文件夹内的资源启动UI",
+			},
+		}))
 	}
 
 	// 删除遗留的shm和wal文件
 	if !model.DBCacheDelete() {
-		logger.Error("数据库缓存文件删除失败")
-		showMsgBox("数据库缓存文件删除失败", "为避免数据损坏，拒绝继续启动。请检查是否启动多份程序，或有其他程序正在使用数据库文件！")
+		logger.Error(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.delete_db_cache_failed.error",
+				Other: "数据库缓存文件删除失败",
+			},
+		}))
+		showMsgBox(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.delete_db_cache_failed.tooltip.title",
+				Other: "数据库缓存文件删除失败",
+			},
+		}), localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.delete_db_cache_failed.tooltip.message",
+				Other: "为避免数据损坏，拒绝继续启动。请检查是否启动多份程序，或有其他程序正在使用数据库文件！",
+			},
+		}))
 		return
 	}
 
@@ -374,22 +468,42 @@ func main() {
 	migrate.TryMigrateToV12()
 	// 尝试修正log_items表的message字段类型
 	if migrateErr := migrate.LogItemFixDatatype(); migrateErr != nil {
-		logger.Errorf("修正log_items表时出错，%s", migrateErr.Error())
+		logger.Errorf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.fix_log_items_failed.error",
+				Other: "修正log_items表时出错，%s",
+			},
+		}), migrateErr.Error())
 		return
 	}
 	// v131迁移历史设置项到自定义文案
 	if migrateErr := migrate.V131DeprecatedConfig2CustomText(); migrateErr != nil {
-		logger.Errorf("迁移历史设置项时出错，%s", migrateErr.Error())
+		logger.Errorf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.migrate_settings_failed.error",
+				Other: "迁移历史设置项时出错，%s",
+			},
+		}), migrateErr.Error())
 		return
 	}
 	// v141重命名刷屏警告字段
 	if migrateErr := migrate.V141DeprecatedConfigRename(); migrateErr != nil {
-		logger.Errorf("迁移历史设置项时出错，%s", migrateErr.Error())
+		logger.Errorf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.migrate_settings_failed.error",
+				Other: "迁移历史设置项时出错，%s",
+			},
+		}), migrateErr.Error())
 		return
 	}
 	// v144删除旧的帮助文档
 	if migrateErr := migrate.V144RemoveOldHelpdoc(); migrateErr != nil {
-		logger.Errorf("移除旧帮助文档时出错，%v", migrateErr)
+		logger.Errorf(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.delete_old_helpdoc_failed.error",
+				Other: "移除旧帮助文档时出错，%v",
+			},
+		}), migrateErr)
 	}
 
 	if !opts.ShowConsole || opts.MultiInstanceOnWindows {
@@ -432,10 +546,6 @@ func main() {
 		os.Exit(0)
 	})()
 
-	if opts.Address != "" {
-		fmt.Println("由参数输入了服务地址:", opts.Address)
-	}
-
 	for _, d := range diceManager.Dice {
 		go diceServe(d)
 	}
@@ -471,7 +581,12 @@ func removeUpdateFiles() {
 func diceServe(d *dice.Dice) {
 	defer dice.CrashLog()
 	if len(d.ImSession.EndPoints) == 0 {
-		d.Logger.Infof("未检测到任何帐号，请先到“帐号设置”进行添加")
+		d.Logger.Infof(localizer.GetLocalizer().MustLocalize(&i18n.LocalizeConfig{
+			DefaultMessage: &i18n.Message{
+				ID:    "dice.core.main.no_endpoints.info",
+				Other: "未检测到任何帐号，请先到“帐号设置”进行添加",
+			},
+		}))
 	}
 
 	d.UIEndpoint = new(dice.EndPointInfo)
