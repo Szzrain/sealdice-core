@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/samber/lo"
 	ds "github.com/sealdice/dicescript"
@@ -92,7 +93,7 @@ func DiceFormatTmpl(ctx *MsgContext, s string) string {
 	if a == nil {
 		text = "<%未知项-" + s + "%>"
 	} else {
-		text = ctx.Dice.TextMap[s].Pick().(string)
+		text = ctx.Dice.TextMap[s].PickSource(randSourceDrawAndTmplSelect).(string)
 
 		// 找出其兼容情况，以决定使用什么版本的引擎
 		engineVersion := "v2"
@@ -220,6 +221,14 @@ func DiceExprEvalBase(ctx *MsgContext, s string, flags RollExtraFlags) (*VMResul
 	}
 
 	s = CompatibleReplace(ctx, s)
+
+	if flags.V1Only {
+		val, detail, err := ctx.Dice._ExprEvalBaseV1(s, ctx, flags)
+		if err != nil {
+			return nil, detail, err
+		}
+		return &VMResultV2m{val.ConvertToV2(), ctx.vm, val, cocFlagVarPrefix, nil}, detail, nil
+	}
 
 	err := ctx.vm.Run(s)
 	if err != nil || ctx.vm.Ret == nil {
@@ -422,7 +431,6 @@ func (ctx *MsgContext) CreateVmIfNotExists() {
 	ctx.vm.Config.EnableDiceCoC = true
 	ctx.vm.Config.EnableDiceFate = true
 	ctx.vm.Config.EnableDiceDoubleCross = true
-	ctx.vm.Config.EnableV1IfCompatible = true
 	ctx.vm.Config.OpCountLimit = 30000
 
 	am := ctx.Dice.AttrsManager
@@ -512,7 +520,7 @@ func (ctx *MsgContext) CreateVmIfNotExists() {
 		if v == nil && strings.Contains(name, ":") {
 			textTmpl := ctx.Dice.TextMap[name]
 			if textTmpl != nil {
-				if v2, err := DiceFormatV2(ctx, textTmpl.Pick().(string)); err == nil {
+				if v2, err := DiceFormatV2(ctx, textTmpl.PickSource(randSourceDrawAndTmplSelect).(string)); err == nil {
 					return ds.NewStrVal(v2)
 				}
 			} else {
@@ -534,8 +542,8 @@ func (ctx *MsgContext) CreateVmIfNotExists() {
 	reSimpleBP := regexp.MustCompile(`^[bpBP]\d*$`)
 
 	mctx := ctx
-	ctx.vm.Config.CustomMakeDetailFunc = func(ctx *ds.Context, details []ds.BufferSpan, dataBuffer []byte) string {
-		detailResult := dataBuffer[:len(ctx.Matched)]
+	ctx.vm.Config.CustomMakeDetailFunc = func(ctx *ds.Context, details []ds.BufferSpan, dataBuffer []byte, parsedOffset int) string {
+		detailResult := dataBuffer[:parsedOffset]
 
 		var curPoint ds.IntType
 		lastEnd := ds.IntType(-1) //nolint:ineffassign
@@ -645,6 +653,8 @@ func (ctx *MsgContext) CreateVmIfNotExists() {
 				if reSimpleBP.MatchString(exprText) {
 					detail = "[" + last.Text[1:len(last.Text)-1]
 				}
+			case "load.computed":
+				detail += "=" + partRet
 			}
 
 			detail += subDetailsText + "]"
@@ -698,8 +708,9 @@ func DiceFormatV2(ctx *MsgContext, s string) (string, error) { //nolint:revive
 	// err := ctx.vm.Run("\x1e" + s + "\x1e")
 	v, err := ctx.vm.RunExpr("\x1e"+s+"\x1e", true)
 	if err != nil || v == nil {
-		fmt.Println("脚本执行出错V2f: ", s, "->", err)
-		return "", err
+		// fmt.Println("脚本执行出错V2f: ", s, "->", err)
+		errText := "格式化错误V2:" + strconv.Quote(s)
+		return errText, err
 	} else {
 		return v.ToString(), nil
 	}
@@ -710,15 +721,15 @@ func _MsgCreate(messageType string, message string) *Message {
 		messageType = "private"
 	}
 
-	userID := "UI:1001"
+	userID := "UI:1101"
 	groupID := ""
 	groupName := ""
 	groupRole := ""
 	if messageType == "group" {
-		userID = "UI:1002"
+		userID = "UI:1101"
 		messageType = "group"
-		groupID = "UI-Group:2001"
-		groupName = "UI-Group 2001"
+		groupID = "UI-Group:2101"
+		groupName = "UI-Group 2101"
 		groupRole = "owner"
 	}
 
@@ -738,45 +749,89 @@ func _MsgCreate(messageType string, message string) *Message {
 	return msg
 }
 
+var reEngineVersionMark = regexp.MustCompile(`\/\/[^\r\n]+\[(v[12])\]`)
+
 // TextMapCompatibleCheck 新旧预设文本兼容性检测
 func TextMapCompatibleCheck(d *Dice, category, k string, textItems []TextTemplateItem) {
 	key := fmt.Sprintf("%s:%s", category, k)
 	x, _ := d.TextMapCompatible.LoadOrStore(key, &SyncMap[string, TextItemCompatibleInfo]{})
+
+	am := d.AttrsManager
 
 	for _, textItem := range textItems {
 		formatExpr := textItem[0].(string)
 
 		msg := _MsgCreate("group", "")
 
-		// 注: 由于选择了真正执行一遍的方式，可能会有部分影响溢出导致修改到测试用户的数据
-		// 但是这个测试用户是 UI:1001 所以姑且认为没有问题
+		tmpSeed := []byte("1234567890ABCDEF")
+		tmpSeed2 := uint64(time.Now().UnixMicro())
+		randSourceDrawAndTmplSelect.Seed(int64(tmpSeed2))
+
+		setupTestAttrs := func(ctx *MsgContext) {
+			// $g
+			if attrs, _ := am.LoadById("UI-Group:2101"); attrs != nil {
+				attrs.Clear()
+				attrs.IsSaved = true
+			}
+			// $m
+			if attrs, _ := am.LoadById("UI:1101"); attrs != nil {
+				attrs.Clear()
+				attrs.IsSaved = true
+			}
+			// 群内临时人物卡
+			if attrs, _ := am.LoadById("UI-Group:2101-UI:1101"); attrs != nil {
+				attrs.Clear()
+				attrs.IsSaved = true
+			}
+
+			// $t
+			ctx.Player.ValueMapTemp = &ds.ValueMap{}
+		}
+
+		// v2 部分
 		ctx := CreateTempCtx(d.UIEndpoint, msg)
+		setupTestAttrs(ctx)
 		ctx.CreateVmIfNotExists()
+		ctx.vm.Seed = tmpSeed
+		ctx.vm.Init()
+		ctx.splitKey = "###SPLIT-KEY###"
+
 		if a, exists := _textMapTestData2[key]; exists {
 			if x, err := a.ToJSON(); err == nil {
 				_ = json.Unmarshal(x, ctx.vm.Attrs) // TODO: 性能好一点的clone
 			}
-			for k, v := range _textMapBuiltin {
-				ctx.vm.Attrs.Store(k, v.Clone())
-			}
 		}
+		for k, v := range _textMapBuiltin {
+			ctx.vm.Attrs.Store(k, v.Clone())
+		}
+
 		text2, err2 := DiceFormatV2(ctx, formatExpr)
 
+		// v1 部分
 		ctx = CreateTempCtx(d.UIEndpoint, msg)
+		setupTestAttrs(ctx)
+		ctx.CreateVmIfNotExists() // 也要设置，因为牌堆要用
+		ctx.vm.Seed = tmpSeed
+		ctx.vm.Init()
+		ctx.splitKey = "###SPLIT-KEY###"
+		ctx._v1Rand = ctx.vm.RandSrc
+		randSourceDrawAndTmplSelect.Seed(int64(tmpSeed2))
+
 		_, presetExists := _textMapTestData2[key]
 		if a, exists := _textMapTestData2[key]; exists {
 			if x, err := a.ToJSON(); err == nil {
 				_ = json.Unmarshal(x, ctx.vm.Attrs) // TODO: 性能好一点的clone
 			}
-			for k, v := range _textMapBuiltin {
-				ctx.vm.Attrs.Store(k, v.Clone())
-			}
+		}
+		for k, v := range _textMapBuiltin {
+			ctx.vm.Attrs.Store(k, v.Clone())
 		}
 
 		text1, err1 := DiceFormatV1(ctx, formatExpr)
 		if err1 != nil {
 			text1 = "" // 因为 formatV1 没有值的时候会返回东西，这样使得两版本一致
 		}
+		setupTestAttrs(ctx) // 清理
 
 		var ver string
 		if err2 == nil {
@@ -800,10 +855,14 @@ func TextMapCompatibleCheck(d *Dice, category, k string, textItems []TextTemplat
 			}
 		}
 
-		if strings.Contains(formatExpr, "[v1]") {
-			ver = "v1" // 强制v1
-		} else if strings.Contains(formatExpr, "[v2]") {
-			ver = "v2" // 强制v2
+		m := reEngineVersionMark.FindStringSubmatch(formatExpr)
+		if len(m) > 0 {
+			v := m[1]
+			if v == "v1" {
+				ver = "v1" // 强制v1
+			} else if v == "v2" {
+				ver = "v2" // 强制v2
+			}
 		}
 
 		info := TextItemCompatibleInfo{Version: ver, TextV2: text2, TextV1: text1, PresetExists: presetExists}

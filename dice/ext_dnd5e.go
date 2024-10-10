@@ -442,8 +442,11 @@ func RegisterBuiltinExtDnd5e(self *Dice) {
 				}
 				detail := r.vm.GetDetailText()
 
-				text := fmt.Sprintf("%s的“%s”检定(dnd5e)结果为:\n%s = %s", getPlayerNameTempFunc(mctx), reason, detail, r.ToString())
+				VarSetValueStr(ctx, "$t技能", reason)
+				VarSetValueStr(ctx, "$t检定过程文本", detail)
+				VarSetValueStr(ctx, "$t检定结果", r.ToString())
 
+				text := DiceFormatTmpl(ctx, "DND:检定")
 				// 指令信息
 				commandInfo := map[string]interface{}{
 					"cmd":    "rc",
@@ -1109,7 +1112,6 @@ func RegisterBuiltinExtDnd5e(self *Dice) {
 						break
 					}
 					result := r.ToString()
-
 					var nums Int64SliceDesc
 					total := int64(0)
 					for _, i := range strings.Split(result, ", ") {
@@ -1130,15 +1132,17 @@ func RegisterBuiltinExtDnd5e(self *Dice) {
 			}
 			sep := DiceFormatTmpl(ctx, "DND:制卡_分隔符")
 			info := strings.Join(ss, sep)
+			VarSetValueStr(ctx, "$t制卡结果文本", info)
+			var text string
 			if isMode2 {
-				ReplyToSender(ctx, msg, fmt.Sprintf("%s的DnD5e人物作成(预设模式):\n%s\n自由分配模式请用.dnd", getPlayerNameTempFunc(ctx), info))
+				text = DiceFormatTmpl(ctx, "DND:制卡_预设模式")
 			} else {
-				ReplyToSender(ctx, msg, fmt.Sprintf("%s的DnD5e人物作成(自由分配模式):\n%s\n获取带属性名的预设请用.dndx", getPlayerNameTempFunc(ctx), info))
+				text = DiceFormatTmpl(ctx, "DND:制卡_自由分配模式")
 			}
+			ReplyToSender(ctx, msg, text)
 			return CmdExecuteResult{Matched: true, Solved: true}
 		},
 	}
-
 	helpRi := `.ri 小明 // 格式1，值为D20
 .ri 12 张三 // 格式2，值12(只能写数字)
 .ri +2 李四 // 格式3，值为D20+2

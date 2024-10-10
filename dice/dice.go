@@ -3,7 +3,6 @@ package dice
 import (
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -12,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/dop251/goja_nodejs/eventloop"
 	"github.com/dop251/goja_nodejs/require"
 	"github.com/go-creed/sat"
@@ -30,35 +28,6 @@ import (
 	"sealdice-core/dice/censor"
 	"sealdice-core/dice/logger"
 	"sealdice-core/dice/model"
-)
-
-var (
-	APPNAME = "SealDice"
-
-	// VERSION 版本号，按固定格式，action 在构建时可能会自动注入部分信息
-	// 正式：主版本号+yyyyMMdd，如 1.4.5+20240308
-	// dev：主版本号-dev+yyyyMMdd.7位hash，如 1.4.5-dev+20240308.1a2b3c4
-	// rc：主版本号-rc.序号+yyyyMMdd.7位hash如 1.4.5-rc.0+20240308.1a2b3c4，1.4.5-rc.1+20240309.2a3b4c4，……
-	VERSION = semver.MustParse(VERSION_MAIN + VERSION_PRERELEASE + VERSION_BUILD_METADATA)
-
-	// VERSION_MAIN 主版本号
-	VERSION_MAIN = "1.5.0"
-	// VERSION_PRERELEASE 先行版本号
-	VERSION_PRERELEASE = "-dev"
-	// VERSION_BUILD_METADATA 版本编译信息
-	VERSION_BUILD_METADATA = ""
-
-	// APP_CHANNEL 更新频道，stable/dev，在 action 构建时自动注入
-	APP_CHANNEL = "dev" //nolint:revive
-
-	VERSION_CODE = int64(1004005) //nolint:revive
-
-	VERSION_JSAPI_COMPATIBLE = []*semver.Version{
-		VERSION,
-		semver.MustParse("1.4.5"),
-		semver.MustParse("1.4.4"),
-		semver.MustParse("1.4.3"),
-	}
 )
 
 type CmdExecuteResult struct {
@@ -280,6 +249,9 @@ type Dice struct {
 	CensorMatchPinyin    bool                   `json:"censorMatchPinyin" yaml:"censorMatchPinyin"`       // 敏感词匹配拼音
 	CensorFilterRegexStr string                 `json:"censorFilterRegexStr" yaml:"censorFilterRegexStr"` // 敏感词过滤字符正则
 
+	VMVersionForReply string `json:"VMVersionForReply" yaml:"VMVersionForReply"` // 自定义回复使用的vm版本
+	VMVersionForDeck  string `json:"VMVersionForDeck" yaml:"VMVersionForDeck"`   // 牌堆使用的vm版本
+
 	AttrsManager *AttrsManager `json:"-" yaml:"-"`
 
 	AdvancedConfig AdvancedConfig `json:"-" yaml:"-"`
@@ -342,6 +314,10 @@ func (d *Dice) Init() {
 	_ = os.MkdirAll(filepath.Join(d.BaseConfig.DataDir, "extra"), 0o755)
 	_ = os.MkdirAll(filepath.Join(d.BaseConfig.DataDir, "scripts"), 0o755)
 
+	log := logger.Init(filepath.Join(d.BaseConfig.DataDir, "record.log"), d.BaseConfig.Name, d.BaseConfig.IsLogPrint)
+	d.Logger = log.Logger
+	d.LogWriter = log.WX
+
 	d.Cron = cron.New()
 	d.Cron.Start()
 
@@ -350,16 +326,13 @@ func (d *Dice) Init() {
 	var err error
 	d.DBData, d.DBLogs, err = model.SQLiteDBInit(d.BaseConfig.DataDir)
 	if err != nil {
-		// TODO:
 		fmt.Println(err)
+		d.Logger.Errorf("Failed to init database: %v", err)
 	}
 
 	d.AttrsManager = &AttrsManager{}
 	d.AttrsManager.Init(d)
 
-	log := logger.Init(filepath.Join(d.BaseConfig.DataDir, "record.log"), d.BaseConfig.Name, d.BaseConfig.IsLogPrint)
-	d.Logger = log.Logger
-	d.LogWriter = log.WX
 	d.BanList = &BanListInfo{Parent: d}
 	d.BanList.Init()
 
@@ -373,7 +346,10 @@ func (d *Dice) Init() {
 	d.CmdMap = CmdMapCls{}
 	d.GameSystemMap = new(SyncMap[string, *GameSystemTemplate])
 	d.ConfigManager = NewConfigManager(filepath.Join(d.BaseConfig.DataDir, "configs", "plugin-configs.json"))
-	_ = d.ConfigManager.Load()
+	err = d.ConfigManager.Load()
+	if err != nil {
+		d.Logger.Error("Failed to load plugin configs: ", err)
+	}
 
 	d.registerCoreCommands()
 	d.RegisterBuiltinExt()
@@ -423,11 +399,16 @@ func (d *Dice) Init() {
 				count++
 				d.Save(true)
 				if count%2 == 0 {
-					// d.Logger.Info("测试: flush wal")
-					_ = model.FlushWAL(d.DBData)
-					_ = model.FlushWAL(d.DBLogs)
+					if err := model.FlushWAL(d.DBData); err != nil {
+						d.Logger.Error("Failed to flush WAL: ", err)
+					}
+					if err := model.FlushWAL(d.DBLogs); err != nil {
+						d.Logger.Error("Failed to flush WAL: ", err)
+					}
 					if d.CensorManager != nil && d.CensorManager.DB != nil {
-						_ = model.FlushWAL(d.CensorManager.DB)
+						if err := model.FlushWAL(d.CensorManager.DB); err != nil {
+							d.Logger.Error("Failed to flush WAL: ", err)
+						}
 					}
 				}
 			}
@@ -603,7 +584,8 @@ func (d *Dice) _ExprTextV1(buffer string, ctx *MsgContext) (string, string, erro
 		return val.Value.(string), detail, err
 	}
 
-	return "格式化错误:" + strconv.Quote(buffer), "", errors.New("格式化错误:" + strconv.Quote(buffer))
+	textQuote := strconv.Quote(buffer) // 主意，这个返回中对err进行改写是错误的，但是历史代码，不做修改
+	return "格式化错误V1:" + textQuote, "", errors.New("格式化错误V1:" + textQuote)
 }
 
 // ExtFind 根据名称或别名查找扩展
@@ -762,22 +744,27 @@ func (d *Dice) GameSystemTemplateAdd(tmpl *GameSystemTemplate) bool {
 	return false
 }
 
-var randSource = rand2.NewSource(uint64(time.Now().Unix()))
+// var randSource = rand2.NewSource(uint64(time.Now().Unix()))
+var randSource = &rand2.PCGSource{}
 
 func DiceRoll(dicePoints int) int { //nolint:revive
 	if dicePoints <= 0 {
 		return 0
 	}
-	val := int(randSource.Uint64()%math.MaxInt32)%dicePoints + 1
-	return val
+	val := ds.Roll(randSource, ds.IntType(dicePoints), 0)
+	return int(val)
+}
+
+func DiceRoll64x(src *rand2.PCGSource, dicePoints int64) int64 { //nolint:revive
+	if src == nil {
+		src = randSource
+	}
+	val := ds.Roll(src, ds.IntType(dicePoints), 0)
+	return int64(val)
 }
 
 func DiceRoll64(dicePoints int64) int64 { //nolint:revive
-	if dicePoints == 0 {
-		return 0
-	}
-	val := int64(randSource.Uint64()%math.MaxInt64)%dicePoints + 1
-	return val
+	return DiceRoll64x(nil, dicePoints)
 }
 
 func CrashLog() {
