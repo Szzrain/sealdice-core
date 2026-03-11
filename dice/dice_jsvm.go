@@ -180,6 +180,7 @@ func (d *Dice) JsInit() {
 			if d.JsLoadingScript != nil {
 				official = d.JsLoadingScript.Official
 			}
+			name = strings.TrimSpace(name)
 			return &ExtInfo{
 				Name: name, Author: author, Version: version,
 				GetDescText:   GetExtensionDesc,
